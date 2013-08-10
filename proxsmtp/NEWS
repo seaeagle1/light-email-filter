@@ -1,0 +1,80 @@
+1.10 [2011-10-21]
+ - Fix race issue with waitpid on linux.
+ - Close all (other than standard) file descriptors when forking filter.
+
+1.9 [2011-01-23]
+ - Fix build warnings.
+ - Fix problem on linux not detecting netfilter headers.
+ - Add true transparent proxying, where both client and server have no
+   knowledge of the proxy. Documented at the proxsmtp web page.
+ - Use capabilities to have transparent proxying without running as root.
+ - Implement a simple reject filter, so no scripts need to be run.
+ - Allow skipping of filtering for authenticated connections.
+ - Bump up the top number of simultaneous connections.
+ - Add client IP addresses to the log line.
+
+1.8 [2008-06-30]
+ - Make the XFOWARD HELO available as a environment variable in scripts. [Glenn Matthys]
+ - Send an RSET to the server after filter fails an email.
+ - Fix an uninitialized pid variable.
+
+1.7 [2007-05-28]
+ - Use my real name 'Stef Walter'
+   See: http://memberwebs.com/nielsen/
+
+1.6 [2006-11-13]
+  - On FreeBSD fix problem where stderr wasn't processed when filter
+    didn't read stdin.
+  - Add strcasestr which is missing on Solaris.
+  - Add back 'Header' option which was accidentally removed in 1.5. Blush!
+
+1.5 [2006-09-05]
+  - Added support for setting the REMOTE variable when an XFORWARD
+    command is seen.
+
+1.4 [2006-08-10]
+  - Fix crasher after connection closes unexpectedly.
+  - Fix problem with waiting for processes [Jeff Fisher]
+  - Better message for 'busy' [Akihiro Sagawa]
+
+1.3 [2005-10-21]
+  - Handle condition of server refusing data transfers more gracefully.
+  - Less chatty when setting timeouts fail
+  - Drop privileges after binding to port. Allows listening on ports < 1024
+  - Ported to Solaris
+  - Fix problem with binding to certain 'long' addresses
+  - Support embedded NULLs in email data.
+  - Fix problems with empty addresses in logs.
+  - Don't let exchange send it's strange binary data through the proxy
+  - Don't reject emails when server is overloaded or errors.
+  - Don't reject emails when starting the filter command fails.
+
+1.2.1 [2005-04-15]
+  - Fixed bug (introduced in 1.2) when 'Header' option is not present.
+
+1.2  [2005-03-24]
+  - Don't leak file descriptors when clamsmtpd can't connect to outgoing
+        SMTP server [Chris Mason]
+  - 'Header' configuration option with special format arguments [Olivier Beyssac]
+  - Supress weird warnings when looking up names of local unix connections.
+
+1.1  [2005-01-27]
+  - Fixed crasher when outgoing connection couldn't be established
+  - Removed erroneous chown line from clamsmtpd.sh
+
+1.0  [2004-12-02]
+  - Added XCLIENT support.
+  - Drop XCLIENT commands coming in from clients for security.
+  - Added big scary warnings to the sample scripts about escaping variables.
+  - Documentation fixes [Olivier Beyssac]
+
+0.6  [2004-10-30]
+  - Added CLIENT and SERVER variables to VirusAction script environment.
+  - Even better logging for network errors and filter warnings.
+  - Print out proxsmtp version in debug logs
+  - Allow configuration of server keep alives (NOOPs). Default to none
+
+0.5  [2004-10-20]
+  - Added sample scripts.
+  - Initial fork from clamsmtp version 0.9.x
+  - Converted into filter based SMTP pass-through

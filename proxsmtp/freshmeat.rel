@@ -1,0 +1,9 @@
+Project: ProxSMTP
+Version: 1.10
+Release-Focus: Minor bugfixes
+Hide: N
+Home-Page-URL: http://thewalter.net/stef/software/proxsmtp/
+Gzipped-Tar-URL: http://thewalter.net/stef/software/proxsmtp/proxsmtp-${version}.tar.gz
+Changelog-URL: http://thewalter.net/stef/software/proxsmtp/NEWS
+
+Fix bugs related to forking and waiting for filtering processes.
