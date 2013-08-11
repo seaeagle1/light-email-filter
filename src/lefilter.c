@@ -177,21 +177,26 @@ int cb_parse_option(const char* name, const char* value)
 	    mode = MODE_VERIFY;
 	else
 	    sp_messagex(NULL, LOG_ERR, "Unknown Mode setting");
+	
+	return 1;
     }
     
     if(strcasecmp("Selector", name) == 0)
     {
         strncpy(dkim_opts.szSelector, value, sizeof(dkim_opts.szSelector));
+	return 1;
     }
     
     if(strcasecmp("Domain", name) == 0)
     {
         strncpy(dkim_opts.szDomain, value, sizeof(dkim_opts.szDomain));
+	return 1;
     }    
     
     if(strcasecmp("PrivateKey", name) == 0)
     {
         keyfile = value;
+	return 1;
     }
     
     if(strcasecmp("Expiry", name) == 0)
@@ -199,7 +204,8 @@ int cb_parse_option(const char* name, const char* value)
 	time_t t;
 	time(&t);
 	char *pEnd;
-	dkim_opts.expireTime = t + strtol(value, &pEnd, 10);         
+	dkim_opts.expireTime = t + strtol(value, &pEnd, 10);   
+	return 1;
     }
     
     return 0;
