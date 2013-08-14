@@ -336,56 +336,76 @@ int sp_run(const char* configfile, const char* pidfile, int dbg_level)
     siginterrupt(SIGINT, 1);
     siginterrupt(SIGTERM, 1);
 
-    /* Create the socket */
-    sock = socket(SANY_TYPE(g_state.listenaddr), SOCK_STREAM, 0);
-    if(sock < 0)
+    if(strcmp(g_state.listenname, "STDIN") == 0)
     {
-        sp_message(NULL, LOG_CRIT, "couldn't open socket");
-        exit(1);
+        struct sockaddr_any peeraddr;
+	int client;
+	spctx_t* ctx = cb_new_context();
+
+	spio_init(&(ctx->client), "CLIENT");
+	spio_init(&(ctx->server), "SERVER");
+	client = fcntl(STDIN_FILENO,  F_DUPFD, 0);
+	sp_messagex(NULL, LOG_DEBUG, "connecting stdin");
+	spio_attach(ctx, &(ctx->client), client, &peeraddr);
+	strncpy(ctx->client.peername, "127.0.0.1", 10);
+	
+	make_connections(ctx, -2);
+	
+	/* call the processor */
+	smtp_passthru(ctx);
+	
+    } else {
+	/* Create the socket */
+	sock = socket(SANY_TYPE(g_state.listenaddr), SOCK_STREAM, 0);
+	if(sock < 0)
+	{
+	    sp_message(NULL, LOG_CRIT, "couldn't open socket");
+	    exit(1);
+	}
+	
+	fcntl(sock, F_SETFD, fcntl(sock, F_GETFD, 0) | FD_CLOEXEC);
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)&true, sizeof(true));
+
+	/* Unlink the socket file if it exists */
+	if(SANY_TYPE(g_state.listenaddr) == AF_UNIX)
+	    unlink(g_state.listenname);
+
+    #ifdef HAVE_IP_TRANSPARENT
+	if(g_state.transparent == TRANSPARENT_FULL)
+	{
+	    int value = 1;
+	    if(setsockopt(sock, SOL_IP, IP_TRANSPARENT, &value, sizeof(value)) < 0)
+		sp_message(NULL, LOG_WARNING, "couldn't set transparent mode on socket");
+	}
+    #endif
+
+	if(bind(sock, &SANY_ADDR(g_state.listenaddr), SANY_LEN(g_state.listenaddr)) != 0)
+	{
+	    sp_message(NULL, LOG_CRIT, "couldn't bind to address: %s", g_state.listenname);
+	    exit(1);
+	}
+	
+	sp_messagex(NULL, LOG_DEBUG, "created socket: %s", g_state.listenname);
+
+	/* Let 5 connections queue up */
+	if(listen(sock, 5) != 0)
+	{
+	    sp_message(NULL, LOG_CRIT, "couldn't listen on socket");
+	    exit(1);
+	}
+ 
+	pid_file(1);
+
+	sp_messagex(NULL, LOG_DEBUG, "accepting connections");
+
+	connection_loop(sock);
+
+	pid_file(0);
+
+	/* Our listen socket */
+	close(sock);
     }
-
-    fcntl(sock, F_SETFD, fcntl(sock, F_GETFD, 0) | FD_CLOEXEC);
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)&true, sizeof(true));
-
-    /* Unlink the socket file if it exists */
-    if(SANY_TYPE(g_state.listenaddr) == AF_UNIX)
-        unlink(g_state.listenname);
-
-#ifdef HAVE_IP_TRANSPARENT
-    if(g_state.transparent == TRANSPARENT_FULL)
-    {
-        int value = 1;
-        if(setsockopt(sock, SOL_IP, IP_TRANSPARENT, &value, sizeof(value)) < 0)
-            sp_message(NULL, LOG_WARNING, "couldn't set transparent mode on socket");
-    }
-#endif
-
-    if(bind(sock, &SANY_ADDR(g_state.listenaddr), SANY_LEN(g_state.listenaddr)) != 0)
-    {
-        sp_message(NULL, LOG_CRIT, "couldn't bind to address: %s", g_state.listenname);
-        exit(1);
-    }
-
-    sp_messagex(NULL, LOG_DEBUG, "created socket: %s", g_state.listenname);
-
-    /* Let 5 connections queue up */
-    if(listen(sock, 5) != 0)
-    {
-        sp_message(NULL, LOG_CRIT, "couldn't listen on socket");
-        exit(1);
-    }
-
-    pid_file(1);
-
-    sp_messagex(NULL, LOG_DEBUG, "accepting connections");
-
-    connection_loop(sock);
-
-    pid_file(0);
-
-    /* Our listen socket */
-    close(sock);
-
+    
     sp_messagex(NULL, LOG_DEBUG, "stopped processing");
     return 0;
 }
@@ -525,7 +545,7 @@ static void connection_loop(int sock)
 {
     spthread_t* threads = NULL;
     int fd, i, x, r;
-
+    
     /* Create the thread buffers */
     threads = (spthread_t*)calloc(g_state.max_threads, sizeof(spthread_t));
     if(!threads)
@@ -537,7 +557,8 @@ static void connection_loop(int sock)
     /* Now loop and accept the connections */
     while(!sp_is_quit())
     {
-        fd = accept(sock, NULL, NULL);
+	fd = accept(sock, NULL, NULL);
+	
         if(fd == -1)
         {
             switch(errno)
@@ -814,11 +835,14 @@ static int make_connections(spctx_t* ctx, int client)
 	int dev;
 #endif /* USE_PF_NATLOOKUP */
 
-    ASSERT(client != -1);
+    if(client != -2)
+    {
+	ASSERT(client != -1);
 
-    /* Setup the incoming connection. This also fills in peeraddr for us */
-    spio_attach(ctx, &(ctx->client), client, &peeraddr);
-    sp_messagex(ctx, LOG_INFO, "accepted connection from: %s", ctx->client.peername);
+	/* Setup the incoming connection. This also fills in peeraddr for us */
+	spio_attach(ctx, &(ctx->client), client, &peeraddr);
+	sp_messagex(ctx, LOG_INFO, "accepted connection from: %s", ctx->client.peername);
+    }
 
     /* Create the server connection address */
     dstaddr = &(g_state.outaddr);
@@ -2216,8 +2240,11 @@ int sp_parse_option(const char* name, const char* value)
 
     else if(strcasecmp(CFG_LISTENADDR, name) == 0)
     {
-        if(sock_any_pton(value, &(g_state.listenaddr), SANY_OPT_DEFANY | SANY_OPT_DEFPORT(DEFAULT_PORT)) == -1)
-            errx(2, "invalid " CFG_LISTENADDR " socket name or ip: %s", value);
+        if(strcmp(value, "STDIN") != 0)
+	{
+	    if(sock_any_pton(value, &(g_state.listenaddr), SANY_OPT_DEFANY | SANY_OPT_DEFPORT(DEFAULT_PORT)) == -1)
+		errx(2, "invalid " CFG_LISTENADDR " socket name or ip: %s", value);
+	}
         g_state.listenname = value;
         ret = 1;
     }
