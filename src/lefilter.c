@@ -233,24 +233,38 @@ static int verify_data(spctx_t* ctx)
     char ebuf[256];
     int n;
     SPF_request_t *spf_request = NULL;
+    char * xforwardaddr = NULL;
+    char * xforwardhelo = NULL;
     
     if(spf_server == NULL)
     {
+	/* redirect errors */
+	SPF_error_handler = SPF_error_syslog; 
+	SPF_warning_handler = SPF_warning_syslog; 
+	SPF_info_handler = SPF_info_syslog; 
+	SPF_debug_handler = SPF_debug_syslog;
+      
         spf_server = SPF_server_new(SPF_DNS_CACHE, 1);
 	if (spf_server == NULL) 
 	    return -1;	  
     }
     
+    /* trim string */
+    if(ctx->xforwardaddr)
+	xforwardaddr = trim_space(ctx->xforwardaddr);
+    if(ctx->xforwardhelo)
+	xforwardhelo = trim_space(ctx->xforwardhelo);
+    
     sp_messagex(ctx, LOG_DEBUG, "New connection: ADDR %s - MAIL FROM %s - XF-ADDR %s - XF-HELO %s", 
-		ctx->client.peername, ctx->sender, ctx->xforwardaddr, ctx->xforwardhelo);
+		ctx->client.peername, ctx->sender, xforwardaddr, xforwardhelo);
     
     spf_request = SPF_request_new(spf_server);
-    if( ctx->xforwardaddr )
-      SPF_request_set_ipv4_str( spf_request, ctx->xforwardaddr );
+    if( xforwardaddr )
+      SPF_request_set_ipv4_str( spf_request, xforwardaddr );
     else if ( ctx->client.peername )
       SPF_request_set_ipv4_str( spf_request, ctx->client.peername );
-    if( ctx->xforwardhelo )
-      SPF_request_set_helo_dom( spf_request, ctx->xforwardhelo );
+    if( xforwardhelo )
+      SPF_request_set_helo_dom( spf_request, xforwardhelo );
     if( ctx->sender )
       SPF_request_set_env_from( spf_request, ctx->sender );
 
